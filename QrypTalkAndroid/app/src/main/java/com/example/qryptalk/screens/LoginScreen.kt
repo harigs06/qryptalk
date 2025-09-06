@@ -1,6 +1,8 @@
 package com.example.qryptalk.screens
 
+import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -17,91 +19,109 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import com.example.qryptalk.data.UserPreferences
+import com.example.qryptalk.viewmodels.AuthViewModel
+import kotlinx.coroutines.launch
 
 @Composable
-fun LoginScreen() {
-    Box(
+fun LoginScreen(
+    navController: NavController,
+    context: Context,
+    authViewModel: AuthViewModel = viewModel()
+) {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+
+    val userPreferences = UserPreferences(context)
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF5F5F5)),
-        contentAlignment = Alignment.Center
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Column {
+        Text(text = "Login", style = MaterialTheme.typography.headlineMedium)
 
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth(0.85f)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(16.dp),
-                elevation = CardDefaults.cardElevation(8.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = "Login",
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
-                    )
+        Spacer(modifier = Modifier.height(24.dp))
 
-                    Spacer(modifier = Modifier.height(24.dp))
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Username") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
 
-                    var username by remember { mutableStateOf("") }
-                    var password by remember { mutableStateOf("") }
+        Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = {
-                            Text("Username")
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth()
+        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+        if (showError) {
+            Text(
+                text = "Login failed. Try again!",
+                color = Color.Red,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
 
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Password") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation()
-                    )
+        Spacer(modifier = Modifier.height(24.dp))
+        val coroutineScope = rememberCoroutineScope()
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    Button(
-                        onClick = { /* handle login */ },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Login")
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    TextButton(onClick = {
-                        //
-                    }) {
-                        Text("Forgot Password?")
+        Button(
+            onClick = {
+                authViewModel.login(username, password) { user ->
+                    if (user != null) {
+                        // Save user and navigate
+                        coroutineScope.launch {
+                            userPreferences.saveUser(
+                                id = user.id,
+                                name = "${user.name}",
+                                email = user.email,
+                                profilePic = ""
+                            )
+                            navController.navigate("userList/${user.id}") {
+                                popUpTo("login") { inclusive = true }
+                            }
+                        }
+                    } else {
+                        showError = true
+                        username = ""
+                        password = ""
                     }
                 }
-            }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Login")
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        TextButton(onClick = { navController.navigate("signup") }) {
+            Text("Don't have an account? Sign Up")
         }
     }
 }

@@ -12,16 +12,28 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.navigation.compose.rememberNavController
 import com.example.qryptalk.models.User
+import com.example.qryptalk.navigation.AppNavGraph
 import com.example.qryptalk.screens.LoginScreen
 import com.example.qryptalk.screens.SessionScreen
-import com.example.qryptalk.screens.UserList
 import com.example.qryptalk.ui.theme.QrypTalkTheme
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.postgrest.Postgrest
+
+//val supabase = createSupabaseClient(
+//            supabaseUrl = "https://xyzcompany.supabase.co",
+//            supabaseKey = "your_public_anon_key"
+//        ) {
+//            install(Postgrest)
+//        }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+//
         setContent {
             QrypTalkTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -29,17 +41,8 @@ class MainActivity : ComponentActivity() {
                       modifier = Modifier
                           .padding(innerPadding)
                   ){
-//                      SessionScreen(
-//                          User(
-//                              "11",
-//                              "hari",
-//                              "dfjadkfjasdlkj",
-//                          ),
-//                          "rt"
-//                      )
-
-
-                      UserList()
+                      val navController = rememberNavController()
+                      AppNavGraph(navController = navController)
                   }
                 }
             }

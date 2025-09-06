@@ -40,12 +40,26 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,42 +68,73 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.example.qryptalk.network.ChatViewModelFactory
+import kotlinx.coroutines.flow.collectLatest
+
+// ChatScreen.kt
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
+import com.example.qryptalk.models.Message
+import kotlinx.coroutines.launch
+
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionScreen(
-    user: User,
+    contact: User,
     currentUserId: String,
-    viewModel: SessionViewModel = viewModel()
+    // pass navController if you need back navigation; otherwise remove
+    viewModel: SessionViewModel = viewModel(factory = ChatViewModelFactory(currentUserId))
 ) {
-    val messages = viewModel.messages
-    val inputText = viewModel.inputText
-    val isSecure = viewModel.isSecure
+    // Collect messages from ViewModel (StateFlow -> Compose)
+    val messages by viewModel.messages.collectAsState(initial = emptyList())
+    val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    // local input state
+    var inputText by remember { mutableStateOf("") }
+
+    // Connect websocket when this screen launches (only once per composition key)
+    LaunchedEffect(key1 = currentUserId) {
+        viewModel.connect()
+    }
+
+    // Auto-scroll to bottom when new message arrives
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            coroutineScope.launch {
+                // scroll to last item
+                listState.animateScrollToItem(messages.size - 1)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            SmallTopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         AsyncImage(
-                            model = user.profilePicUrl,
-                            contentDescription = "${user.name}'s profile",
+                            model = contact.profilePicUrl,
+                            contentDescription = "${contact.name} avatar",
                             modifier = Modifier
                                 .size(40.dp)
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
+                                .clip(RoundedCornerShape(20.dp))
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = user.name)
+                        Text(text = contact.name)
                     }
-                },
-                actions = {
-                    Icon(
-                        imageVector = if (isSecure) Icons.Default.Lock else Icons.Default.Warning,
-                        tint = if (isSecure) Color.Green else Color.Red,
-                        contentDescription = if (isSecure) "Secure" else "Insecure",
-                        modifier = Modifier.padding(end = 12.dp)
-                    )
                 }
             )
         }
@@ -99,58 +144,77 @@ fun SessionScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-
+            // Messages
             LazyColumn(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(8.dp)
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                state = listState,
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(messages) { msg ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (msg.isFromMe) Arrangement.End else Arrangement.Start
-                    ) {
-                        Surface(
-                            color = if (msg.isFromMe) Color(0xFFDCF8C6) else Color.LightGray,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.padding(4.dp)
-                        ) {
-                            Column(modifier = Modifier.padding(8.dp)) {
-                                Text(text = msg.content)
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = viewModel.formatTimestamp(msg.timestamp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Color.DarkGray
-                                )
-                            }
-                        }
-                    }
+                items(items = messages, key = { it.id }) { msg ->
+                    MessageRow(msg = msg)
                 }
             }
 
-
+            // Input row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp)
-                    .imePadding()
-                    .navigationBarsPadding(),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 TextField(
                     value = inputText,
-                    onValueChange = { viewModel.onInputChange(it) },
+                    onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Type a message") }
+                    placeholder = { Text("Type a message") },
+                    maxLines = 4,
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { viewModel.sendMessage(currentUserId) }) {
-                    Text("Send")
+                IconButton(
+                    onClick = {
+                        val trimmed = inputText.trim()
+                        if (trimmed.isNotEmpty()) {
+                            viewModel.sendMessage(trimmed)
+                            inputText = ""
+                        }
+                    }
+                ) {
+                    Icon(imageVector = Icons.Default.Send, contentDescription = "Send")
                 }
             }
         }
     }
 }
 
+@Composable
+private fun MessageRow(msg: Message) {
+    val alignment = if (msg.isFromMe) Alignment.End else Alignment.Start
+    val bubbleColor = if (msg.isFromMe) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = if (msg.isFromMe) Arrangement.End else Arrangement.Start
+    ) {
+        Surface(
+            color = bubbleColor,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+                Text(text = msg.content)
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                        .format(java.util.Date(msg.timestamp)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}

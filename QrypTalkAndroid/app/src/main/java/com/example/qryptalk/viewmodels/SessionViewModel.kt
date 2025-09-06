@@ -13,55 +13,62 @@ import java.util.UUID
 
 
 import androidx.compose.runtime.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import java.text.SimpleDateFormat
 import java.util.*
 
-class SessionViewModel : ViewModel() {
+import androidx.lifecycle.viewModelScope
+import com.example.qryptalk.network.ChatWebSocketClient
+import kotlinx.coroutines.launch
 
-    var messages = mutableStateListOf<Message>()
-        private set
 
-    var inputText by mutableStateOf("")
-        private set
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 
-    var isSecure by mutableStateOf(true)
-        private set
+class SessionViewModel(private val userId: String) : ViewModel() {
 
-    fun onInputChange(newText: String) {
-        inputText = newText
-    }
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
+    val messages: StateFlow<List<Message>> = _messages
 
-    fun sendMessage(senderId: String) {
-        if (inputText.isNotBlank()) {
-            val msg = Message(
-                id = UUID.randomUUID().toString(),
-                senderId = senderId,
-                content = inputText,
-                isFromMe = true,
-                timestamp = System.currentTimeMillis()
-            )
-            messages.add(msg)
-            inputText = ""
+    private var webSocketClient: ChatWebSocketClient? = null
+
+    fun connect() {
+        webSocketClient = ChatWebSocketClient(userId, ::onMessageReceived).apply {
+            connect()
         }
     }
 
-    fun receiveMessage(senderId: String, text: String) {
-        val msg = Message(
+    private fun onMessageReceived(content: String, senderId: String) {
+        val message = Message(
             id = UUID.randomUUID().toString(),
             senderId = senderId,
-            content = text,
-            isFromMe = false,
-            timestamp = System.currentTimeMillis()
+            content = content,
+            isFromMe = senderId == userId
         )
-        messages.add(msg)
+        viewModelScope.launch {
+            _messages.value = _messages.value + message
+        }
     }
 
-    fun updateSecurity(secure: Boolean) {
-        isSecure = secure
+    fun sendMessage(content: String) {
+        val message = Message(
+            id = UUID.randomUUID().toString(),
+            senderId = userId,
+            content = content,
+            isFromMe = true
+        )
+        viewModelScope.launch {
+            _messages.value = _messages.value + message
+        }
+        webSocketClient?.sendMessage(content)
     }
 
-    fun formatTimestamp(timestamp: Long): String {
-        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-        return sdf.format(Date(timestamp))
+    override fun onCleared() {
+        super.onCleared()
+        webSocketClient?.close()
     }
 }
+
