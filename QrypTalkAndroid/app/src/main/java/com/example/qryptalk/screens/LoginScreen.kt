@@ -102,7 +102,7 @@ fun LoginScreen(
                                 email = user.email,
                                 profilePic = ""
                             )
-                            navController.navigate("userList/${user.id}") {
+                            navController.navigate("user_list") {
                                 popUpTo("login") { inclusive = true }
                             }
                         }

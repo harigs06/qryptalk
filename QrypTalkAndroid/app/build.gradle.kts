@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.kapt")
     kotlin("plugin.serialization") version "2.0.21"
 }
 
@@ -90,5 +91,14 @@ dependencies {
     implementation("io.ktor:ktor-client-websockets:2.3.7")
     implementation("io.ktor:ktor-client-encoding:2.3.7")
 //    implementation("io.ktor:ktor-client-timeout:2.3.7")
+
+
+    implementation("androidx.room:room-runtime:2.6.1")
+
+    // Kotlin extensions and Coroutines support for Room
+    implementation("androidx.room:room-ktx:2.6.1")
+
+    // Annotation processor
+    kapt("androidx.room:room-compiler:2.6.1")
 
 }

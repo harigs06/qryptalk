@@ -45,11 +45,11 @@ class ChatWebSocketClient(
 
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             webSocket.close(1000, null)
-            println("⚠️ Closing WebSocket: $code / $reason")
+            println("Closing WebSocket: $code / $reason")
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            println("❌ WebSocket error: ${t.message}")
+            println(" WebSocket error: ${t.message}")
         }
     }
 

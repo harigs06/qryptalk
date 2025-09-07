@@ -26,49 +26,105 @@ import kotlinx.coroutines.launch
 
 
 import androidx.lifecycle.viewModelScope
+import com.example.qryptalk.network.ChatWebSocketManager
+import com.example.qryptalk.network.WSEnvelope
 import kotlinx.coroutines.launch
 
-class SessionViewModel(private val userId: String) : ViewModel() {
+
+
+
+class SessionViewModel(
+    private val currentUserId: String,
+    private val contactId: String,
+    private val wsManager: ChatWebSocketManager
+) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
 
-    private var webSocketClient: ChatWebSocketClient? = null
+    val lastQber: Double
+        get() = _messages.value.lastOrNull()?.qber ?: 0.0
 
-    fun connect() {
-        webSocketClient = ChatWebSocketClient(userId, ::onMessageReceived).apply {
-            connect()
+    init {
+        wsManager.start(currentUserId)
+
+        viewModelScope.launch {
+            wsManager.incoming.collect { env ->
+                when (env.type) {
+                    "chat" -> {
+                        val from = env.from ?: return@collect
+                        val to = env.to ?: return@collect
+                        val isForThisChat =
+                            (from == contactId && to == currentUserId) ||
+                                    (from == currentUserId && to == contactId)
+
+                        if (isForThisChat) {
+                            val msg = Message(
+                                id = UUID.randomUUID().toString(),
+                                senderId = from,
+                                content = env.content ?: "",
+                                isFromMe = (from == currentUserId),
+                                timestamp = env.timestamp ?: System.currentTimeMillis(),
+                                qber = env.qber ?: 0.0
+                            )
+                            _messages.value = _messages.value + msg
+                        }
+                    }
+                    "qber" -> {
+                        val systemMsg = Message(
+                            id = UUID.randomUUID().toString(),
+                            senderId = "server",
+                            content = "QBER update: ${env.qber ?: 0.0}",
+                            isFromMe = false,
+                            timestamp = env.timestamp ?: System.currentTimeMillis(),
+                            qber = env.qber ?: 0.0
+                        )
+                        _messages.value = _messages.value + systemMsg
+                    }
+                }
+            }
         }
     }
 
-    private fun onMessageReceived(content: String, senderId: String) {
-        val message = Message(
-            id = UUID.randomUUID().toString(),
-            senderId = senderId,
-            content = content,
-            isFromMe = senderId == userId
-        )
+    fun sendMessage(plainText: String) {
         viewModelScope.launch {
-            _messages.value = _messages.value + message
+            val envelope = WSEnvelope(
+                type = "chat",
+                from = currentUserId,
+                to = contactId,
+                content = plainText,
+                timestamp = System.currentTimeMillis()
+            )
+            wsManager.sendEnvelopeAsync(envelope)
+
+            val local = Message(
+                id = UUID.randomUUID().toString(),
+                senderId = currentUserId,
+                content = plainText,
+                isFromMe = true,
+                timestamp = System.currentTimeMillis(),
+                qber = 0.0
+            )
+            _messages.value = _messages.value + local
         }
     }
 
-    fun sendMessage(content: String) {
-        val message = Message(
-            id = UUID.randomUUID().toString(),
-            senderId = userId,
-            content = content,
-            isFromMe = true
-        )
+    fun requestQber() {
         viewModelScope.launch {
-            _messages.value = _messages.value + message
+            val payload = WSEnvelope(
+                type = "request_qber",
+                from = currentUserId,
+                to = contactId,
+                timestamp = System.currentTimeMillis()
+            )
+            wsManager.sendEnvelopeAsync(payload)
         }
-        webSocketClient?.sendMessage(content)
     }
 
     override fun onCleared() {
         super.onCleared()
-        webSocketClient?.close()
+        wsManager.stop()
     }
 }
+
 
